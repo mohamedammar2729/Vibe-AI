@@ -1,3 +1,5 @@
+import { Sandbox } from '@e2b/code-interpreter';
+import { getSandbox } from './utils';
 import { AzureKeyCredential } from '@azure/core-auth';
 import ModelClient, {
   ChatCompletionsOutput,
@@ -105,45 +107,65 @@ export const helloWorld = inngest.createFunction(
   },
   { event: 'test/hello.world' },
   async ({ event, step }) => {
-    return await step.run('azure-openai-code-generation', async () => {
-      const startTime = Date.now();
+    const sandboxId = await step.run('get-sandbox-id', async () => {
+      // Create a new sandbox instance for code execution
+      const sandbox = await Sandbox.create('vibe-aii-test2');
+      return sandbox.sandboxId;
+    });
 
-      try {
-        // Validate and sanitize input
-        const inputText = validateInputText(event.data?.value);
+    const codeGeneration = await step.run(
+      'azure-openai-code-generation',
+      async () => {
+        const startTime = Date.now();
 
-        const codeAgent = await generateWithAzureOpenAI(
-          `Write the following snippet: "${inputText}"`
-        );
+        try {
+          // Validate and sanitize input
+          const inputText = validateInputText(event.data?.value);
 
-        const executionTime = Date.now() - startTime;
-        return {
-          success: true,
-          data: {
-            originalText: inputText,
-            codeSnippet: codeAgent,
-            metadata: {
-              model: 'gpt-4.1',
+          const codeAgent = await generateWithAzureOpenAI(
+            `Write the following snippet: "${inputText}"`
+          );
+
+          const executionTime = Date.now() - startTime;
+          return {
+            success: true,
+            data: {
+              originalText: inputText,
+              codeSnippet: codeAgent,
+              metadata: {
+                model: 'gpt-4.1',
+                provider: 'azure-openai-github-marketplace',
+                processedAt: new Date().toISOString(),
+                executionTimeMs: executionTime,
+              },
+            },
+          };
+        } catch (error) {
+          const executionTime = Date.now() - startTime;
+          const formattedError = formatError(error, 'Azure OpenAI failed');
+          return {
+            success: false,
+            error: {
+              message: formattedError.message,
+              code: 'AZURE_OPENAI_FAILED',
+              timestamp: new Date().toISOString(),
               provider: 'azure-openai-github-marketplace',
-              processedAt: new Date().toISOString(),
               executionTimeMs: executionTime,
             },
-          },
-        };
-      } catch (error) {
-        const executionTime = Date.now() - startTime;
-        const formattedError = formatError(error, 'Azure OpenAI failed');
-        return {
-          success: false,
-          error: {
-            message: formattedError.message,
-            code: 'AZURE_OPENAI_FAILED',
-            timestamp: new Date().toISOString(),
-            provider: 'azure-openai-github-marketplace',
-            executionTimeMs: executionTime,
-          },
-        };
+          };
+        }
       }
+    );
+
+    const sandboxUrl = await step.run('get-sandbox-url', async () => {
+      const sandbox = await getSandbox(sandboxId);
+      const host = sandbox.getHost(3000);
+      return `https://${host}`;
     });
+
+    return {
+      sandboxUrl,
+      ...codeGeneration,
+    };
   }
 );
