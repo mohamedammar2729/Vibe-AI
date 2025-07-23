@@ -8,12 +8,17 @@ export const messagesRouter = createTRPCRouter({
   create: baseProcedure
     .input(
       z.object({
-        value: z.string().min(1, { message: 'Message is required' }),
+        value: z
+          .string()
+          .min(1, { message: 'Message is required' })
+          .max(10000, { message: 'Message is too long' }),
+          projectId: z.string().min(1, { message: 'Project ID is required' }),
       })
     )
     .mutation(async ({ input }) => {
       const createMessage = await prisma.message.create({
         data: {
+          projectId: input.projectId,
           content: input.value,
           role: 'USER', // Assuming the role is 'user' for this example
           type: 'RESULT', // Replace with actual conversation ID logic
@@ -24,20 +29,21 @@ export const messagesRouter = createTRPCRouter({
         name: 'code-agent/run',
         data: {
           value: input.value,
+          projectId: input.projectId,
         },
       });
       return createMessage;
     }),
 
-    getMany: baseProcedure.query(async () => {
-      const messages = await prisma.message.findMany({
-        orderBy: {
-          createdAt: 'desc',
-        },
-        // include: {
-        //   Fragment: true, // Include related fragment data if needed
-        // },
-      });
-      return messages;
-    }),
+  getMany: baseProcedure.query(async () => {
+    const messages = await prisma.message.findMany({
+      orderBy: {
+        createdAt: 'desc',
+      },
+      // include: {
+      //   Fragment: true, // Include related fragment data if needed
+      // },
+    });
+    return messages;
+  }),
 });
