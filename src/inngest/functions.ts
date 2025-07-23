@@ -1,110 +1,20 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Sandbox } from '@e2b/code-interpreter';
 import { getSandbox } from './utils';
-import { AzureKeyCredential } from '@azure/core-auth';
-import ModelClient, {
-  ChatCompletionsOutput,
-  ChatRequestMessage,
-} from '@azure-rest/ai-inference';
 
 import { inngest } from './client';
 import {
-  getAzureOpenAIConfig,
-  validateInputText,
-  formatError,
-  logMetrics,
-} from '../config/azure-openai.config';
-
-/**
- * Azure OpenAI client configuration for GitHub Marketplace
- * Uses GPT-4.1 model with classic access token authentication
- */
-const createAzureOpenAIClient = () => {
-  const config = getAzureOpenAIConfig();
-
-  return ModelClient(
-    config.baseUrl,
-    new AzureKeyCredential(config.githubToken)
-  );
-};
-
-/**
- * Generate text using Azure OpenAI GPT-4.1
- */
-const generateWithAzureOpenAI = async (prompt: string): Promise<string> => {
-  const client = createAzureOpenAIClient();
-  const config = getAzureOpenAIConfig();
-  const startTime = Date.now();
-
-  try {
-    const messages: ChatRequestMessage[] = [
-      {
-        role: 'system',
-        content:
-          'You are an expert next.js developer. You write readable, maintainable code. Your write simple Next.js & React snippets. You are very good at writing code in tailwind css that is easy to read and understand in style.',
-      },
-      {
-        role: 'user',
-        content: prompt,
-      },
-    ];
-
-    const response = await client.path('/chat/completions').post({
-      body: {
-        model: config.model,
-        messages: messages,
-        temperature: config.temperature, // Controls creativity: 0 = super boring, 1 = very creative
-        max_tokens: config.maxTokens, // The max number of words/characters the AI can respond with
-        top_p: config.topP, // Another setting for randomness (usually keep 1)
-      },
-    });
-
-    if (response.status !== '200') {
-      throw new Error(`Azure OpenAI API error: ${response.status}`);
-    }
-
-    const data = response.body as ChatCompletionsOutput;
-    const content = data.choices?.[0]?.message?.content;
-
-    if (!content) {
-      throw new Error('No content received from Azure OpenAI API');
-    }
-
-    const executionTime = Date.now() - startTime;
-    logMetrics({
-      functionName: 'generateWithAzureOpenAI',
-      inputLength: prompt.length,
-      outputLength: content.length,
-      executionTime,
-      success: true,
-    });
-
-    return content.trim();
-  } catch (error) {
-    const executionTime = Date.now() - startTime;
-    logMetrics({
-      functionName: 'generateWithAzureOpenAI',
-      inputLength: prompt.length,
-      outputLength: 0,
-      executionTime,
-      success: false,
-    });
-
-    console.error('Azure OpenAI API error:', error);
-    throw new Error(
-      'Failed to generate response: ' + formatError(error).message
-    );
-  }
-};
+  createTool,
+  createAgent,
+  createNetwork,
+  gemini,
+} from '@inngest/agent-kit';
+import { z } from 'zod';
+import { PROMPT } from '../prompt';
+import { lastAssistantTextMessageIndex } from './utils';
 
 export const helloWorld = inngest.createFunction(
-  {
-    id: 'hello-world',
-    name: 'CodeAgent with Azure OpenAI GPT-4.1',
-    concurrency: {
-      limit: 10, // If 10 users send text at once, all 10 can be processed in parallel
-    },
-    retries: 3, // If something goes wrong (error), try again up to 3 times.
-  },
+  { id: 'hello-world' },
   { event: 'test/hello.world' },
   async ({ event, step }) => {
     const sandboxId = await step.run('get-sandbox-id', async () => {
@@ -112,60 +22,162 @@ export const helloWorld = inngest.createFunction(
       const sandbox = await Sandbox.create('vibe-aii-test2');
       return sandbox.sandboxId;
     });
-
-    const codeGeneration = await step.run(
-      'azure-openai-code-generation',
-      async () => {
-        const startTime = Date.now();
-
-        try {
-          // Validate and sanitize input
-          const inputText = validateInputText(event.data?.value);
-
-          const codeAgent = await generateWithAzureOpenAI(
-            `Write the following snippet: "${inputText}"`
-          );
-
-          const executionTime = Date.now() - startTime;
-          return {
-            success: true,
-            data: {
-              originalText: inputText,
-              codeSnippet: codeAgent,
-              metadata: {
-                model: 'gpt-4.1',
-                provider: 'azure-openai-github-marketplace',
-                processedAt: new Date().toISOString(),
-                executionTimeMs: executionTime,
-              },
-            },
-          };
-        } catch (error) {
-          const executionTime = Date.now() - startTime;
-          const formattedError = formatError(error, 'Azure OpenAI failed');
-          return {
-            success: false,
-            error: {
-              message: formattedError.message,
-              code: 'AZURE_OPENAI_FAILED',
-              timestamp: new Date().toISOString(),
-              provider: 'azure-openai-github-marketplace',
-              executionTimeMs: executionTime,
-            },
-          };
+    const codeAgent = createAgent({
+      name: 'code-agent',
+      description: 'An expert coding agent',
+      system: PROMPT,
+      model: gemini({
+        model: 'gemini-2.5-flash',
+      }),
+      tools: [
+        createTool({
+          name: 'terminal',
+          description: 'Use the terminal to run commands.',
+          // this is the command that will be run in the terminal by the agent (ai)
+          parameters: z.object({
+            command: z.string(),
+          }),
+          handler: async ({ command }, { step }) => {
+            // it returns the result of the command execution
+            // run take the name of tool and a function that will be executed
+            return await step?.run('terminal', async () => {
+              const buffers = { stdout: '', stderr: '' };
+              try {
+                // check if the sandbox is available
+                const sandbox = await getSandbox(sandboxId);
+                // run the command in the sandbox and capture stdout and stderr
+                const result = await sandbox.commands.run(command, {
+                  // When the command prints normal output add it to stdout text.
+                  onStdout: (data: string) => {
+                    buffers.stdout += data;
+                  },
+                  // When the command prints error output, add it to stderr text.
+                  onStderr: (data: string) => {
+                    buffers.stderr += data;
+                  },
+                });
+                return result.stdout;
+              } catch (error) {
+                console.error(`
+              command failed: ${error} \nstdout: ${buffers.stdout} \nstderr: ${buffers.stderr}
+            `);
+                return `command failed: ${error} \nstdout: ${buffers.stdout} \nstderr: ${buffers.stderr}`;
+              }
+            });
+          },
+        }),
+        createTool({
+          name: 'createOrUpdateFiles',
+          description: 'Create or update a file in the sandbox.',
+          // Zod schema: an array of { path, content } objects — file path + text to write.
+          parameters: z.object({
+            files: z.array(
+              z.object({
+                path: z.string(),
+                content: z.string(),
+              })
+            ),
+          }),
+          // When called, we get files array. Also access network shared state.
+          handler: async ({ files }, { step, network }) => {
+            const newFiles = await step?.run(
+              'createOrUpdateFiles',
+              async () => {
+                try {
+                  // start an object that remembers written files across tool calls.
+                  const updateFiles = network.state.data.files || {};
+                  const sandbox = await getSandbox(sandboxId);
+                  // Loop through files: write each file’s content into sandbox.
+                  // store the content in updateFiles map.
+                  for (const file of files) {
+                    await sandbox.files.write(file.path, file.content);
+                    updateFiles[file.path] = file.content;
+                  }
+                  return updateFiles;
+                } catch (error) {
+                  return 'Error creating files: ' + error;
+                }
+              }
+            );
+            // After step finishes, check: if we actually got an object back,
+            // save it into network.state.data.files so all agents/steps can see updated file list.
+            if (typeof newFiles === 'object') {
+              network.state.data.files = newFiles;
+            }
+          },
+        }),
+        createTool({
+          name: 'readFiles',
+          description: 'Read files from the sandbox.',
+          // Needs a list / array of file paths (strings).
+          parameters: z.object({
+            files: z.array(z.string()),
+          }),
+          handler: async ({ files }, { step }) => {
+            // This tool reads files from the sandbox and returns their contents.
+            return await step?.run('readFiles', async () => {
+              try {
+                const sandbox = await getSandbox(sandboxId);
+                const contents = [];
+                // Loop through each file path, read its content, and store it in an array.
+                for (const file of files) {
+                  const content = await sandbox.files.read(file);
+                  contents.push({ path: file, content });
+                }
+                return JSON.stringify(contents);
+              } catch (error) {
+                return 'Error reading files: ' + error;
+              }
+            });
+          },
+        }),
+      ],
+      // Lifecycle hooks for the agent. it has access to all tools and network state.
+      lifecycle: {
+        // Run every time the agent produces a response message.
+        // We see what it said & can update shared state.
+        onResponse: async ({ result, network }) => {
+          // result is the agent response, which includes messages.
+          // We want to check if the last message is a text message from the assistant.
+          // If it is, we check if it contains a <task_summary> tag.
+          const lastAssistantTextMessage =
+            lastAssistantTextMessageIndex(result);
+          // If the text contains <task_summary> tag, store entire message in network.state.data.summary so other parts can know we’re done / have summary.
+          if (lastAssistantTextMessage && network) {
+            if (lastAssistantTextMessage.includes('<task_summary>')) {
+              network.state.data.summary = lastAssistantTextMessage;
+            }
+          }
+          return result;
+        },
+      },
+    });
+    const network = createNetwork({
+      name: 'code-agent-network',
+      agents: [codeAgent],
+      maxIter: 15,
+      // if we have a summary in the network state, break the loop.
+      router: async ({ network }) => {
+        const summary = network.state.data.summary;
+        if (summary) {
+          return;
         }
-      }
-    );
+        // If no summary, continue running the agent. limit to 15 iterations.
+        return codeAgent;
+      },
+    });
+    const result = await network.run(event.data.value);
 
     const sandboxUrl = await step.run('get-sandbox-url', async () => {
       const sandbox = await getSandbox(sandboxId);
       const host = sandbox.getHost(3000);
       return `https://${host}`;
     });
-
     return {
-      sandboxUrl,
-      ...codeGeneration,
+      url: sandboxUrl,
+      title: 'Fragment',
+      files: result.state.data.files,
+      summary: result.state.data.summary,
     };
   }
 );
