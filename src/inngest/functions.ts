@@ -37,7 +37,7 @@ export const codeAgentFunction = inngest.createFunction(
       description: 'An expert coding agent',
       system: PROMPT,
       model: gemini({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-2.5-pro',
       }),
       tools: [
         createTool({
@@ -165,7 +165,7 @@ export const codeAgentFunction = inngest.createFunction(
     const network = createNetwork<AgentState>({
       name: 'code-agent-network',
       agents: [codeAgent],
-      maxIter: 15,
+      maxIter: 30,
       // if we have a summary in the network state, break the loop.
       router: async ({ network }) => {
         const summary = network.state.data.summary;
