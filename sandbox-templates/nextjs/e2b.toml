@@ -15,3 +15,9 @@ start_cmd = "/compile_page.sh"
 dockerfile = "e2b.Dockerfile"
 template_name = "vibe-aii-test2"
 template_id = "868zp6dm4r86spmpwtkk"
+
+# Timeout configurations (in seconds)
+# Default timeout for sandbox operations
+timeout = 1800  # 30 minutes
+# Timeout for command execution
+cmd_timeout = 600  # 10 minutes

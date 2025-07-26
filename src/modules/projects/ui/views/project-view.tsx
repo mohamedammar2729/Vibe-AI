@@ -43,13 +43,13 @@ export function ProjectView({ projectId }: Props) {
             />
           </Suspense>
         </ResizablePanel>
-        <ResizableHandle withHandle />
+        <ResizableHandle className='hover:bg-primary transition-colors' />
         <ResizablePanel defaultSize={65} minSize={50}>
           <Tabs
             className='h-full gap-y-0'
             defaultValue='preview'
             value={tabState}
-            onValueChange={(value) => setTabState(value as 'preview' | 'code')}
+            onValueChange={(value) => setTabState(value as "preview" | "code")}
           >
             <div className='w-full flex items-center p-2 border-b gap-x-2'>
               <TabsList className='h-8 p-0 border rounded-md'>
