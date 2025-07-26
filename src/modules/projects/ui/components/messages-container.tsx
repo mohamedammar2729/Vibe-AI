@@ -1,11 +1,11 @@
-'use client';
-import { useTRPC } from '@/trpc/client';
-import { useSuspenseQuery } from '@tanstack/react-query';
-import { MessageCard } from './message-card';
-import { MessageForm } from './message-form';
-import { useEffect, useRef } from 'react';
-import { Fragment } from '@/generated/prisma';
-import { MessageLoading } from './message-loading';
+"use client";
+import { useTRPC } from "@/trpc/client";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { MessageCard } from "./message-card";
+import { MessageForm } from "./message-form";
+import { useEffect, useRef } from "react";
+import { Fragment } from "@/generated/prisma";
+import { MessageLoading } from "./message-loading";
 
 interface Props {
   projectId: string;
@@ -19,6 +19,7 @@ export const MessagesContainer = ({
   setActiveFragment,
 }: Props) => {
   const bottomRef = useRef<HTMLDivElement>(null);
+  const lastAssistantMessageIdRef = useRef<string | null>(null);
   const trpc = useTRPC();
 
   const { data: messages } = useSuspenseQuery(
@@ -28,22 +29,26 @@ export const MessagesContainer = ({
       { refetchInterval: 5000 }
     )
   );
-  // TODO: This is causing problems
-  // useEffect(() => {
-  //   const lastAssistantMessageWithFragment = messages.findLast(
-  //     (message) => message.role === 'ASSISTANT' && !!message.Fragment
-  //   );
-  //   if (lastAssistantMessageWithFragment) {
-  //     setActiveFragment(lastAssistantMessageWithFragment.Fragment);
-  //   }
-  // }, [setActiveFragment, messages]);
+
+  useEffect(() => {
+    const lastAssistantMessage = messages.findLast(
+      (message) => message.role === "ASSISTANT"
+    );
+    if (
+      lastAssistantMessage?.Fragment &&
+      lastAssistantMessageIdRef.current !== lastAssistantMessage.id
+    ) {
+      setActiveFragment(lastAssistantMessage.Fragment);
+      lastAssistantMessageIdRef.current = lastAssistantMessage.id;
+    }
+  }, [setActiveFragment, messages]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView();
   }, [messages.length]);
 
   const lastMessage = messages[messages.length - 1];
-  const isLastMessageUser = lastMessage?.role === 'USER';
+  const isLastMessageUser = lastMessage?.role === "USER";
 
   return (
     <div className=' flex flex-col flex-1 min-h-0'>

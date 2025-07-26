@@ -1,48 +1,53 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-import { Sandbox } from '@e2b/code-interpreter';
-import { getSandbox } from './utils';
+import { Sandbox } from "@e2b/code-interpreter";
+import { getSandbox } from "./utils";
 
-import { inngest } from './client';
+import { inngest } from "./client";
 import {
   createTool,
   createAgent,
   createNetwork,
   gemini,
   type Tool,
-} from '@inngest/agent-kit';
-import { z } from 'zod';
-import { PROMPT } from '../prompt';
-import { lastAssistantTextMessageIndex } from './utils';
-import { prisma } from '@/lib/db';
+} from "@inngest/agent-kit";
+import { z } from "zod";
+import { PROMPT } from "../prompt";
+import { lastAssistantTextMessageIndex } from "./utils";
+import { prisma } from "@/lib/db";
 
-
-interface AgentState{
+interface AgentState {
   summary: string;
-  files: {[path: string]: string};
+  files: { [path: string]: string };
 }
 
-
-
 export const codeAgentFunction = inngest.createFunction(
-  { id: 'code-agent' },
-  { event: 'code-agent/run' },
+  {
+    id: "code-agent",
+    // Increase function timeout to 30 minutes
+    timeouts: {
+      // Function execution timeout
+      start: "30m",
+    },
+  },
+  { event: "code-agent/run" },
   async ({ event, step }) => {
-    const sandboxId = await step.run('get-sandbox-id', async () => {
-      // Create a new sandbox instance for code execution
-      const sandbox = await Sandbox.create('vibe-aii-test2');
+    const sandboxId = await step.run("get-sandbox-id", async () => {
+      // Create a new sandbox instance for code execution with timeout configuration
+      const sandbox = await Sandbox.create("vibe-aii-test2", {
+        timeoutMs: 1800000, // 30 minutes in milliseconds
+      });
       return sandbox.sandboxId;
     });
     const codeAgent = createAgent<AgentState>({
-      name: 'code-agent',
-      description: 'An expert coding agent',
+      name: "code-agent",
+      description: "An expert coding agent",
       system: PROMPT,
       model: gemini({
-        model: 'gemini-2.5-pro',
+        model: "gemini-2.5-pro",
       }),
       tools: [
         createTool({
-          name: 'terminal',
-          description: 'Use the terminal to run commands.',
+          name: "terminal",
+          description: "Use the terminal to run commands.",
           // this is the command that will be run in the terminal by the agent (ai)
           parameters: z.object({
             command: z.string(),
@@ -50,13 +55,14 @@ export const codeAgentFunction = inngest.createFunction(
           handler: async ({ command }, { step }) => {
             // it returns the result of the command execution
             // run take the name of tool and a function that will be executed
-            return await step?.run('terminal', async () => {
-              const buffers = { stdout: '', stderr: '' };
+            return await step?.run("terminal", async () => {
+              const buffers = { stdout: "", stderr: "" };
               try {
                 // check if the sandbox is available
                 const sandbox = await getSandbox(sandboxId);
                 // run the command in the sandbox and capture stdout and stderr
                 const result = await sandbox.commands.run(command, {
+                  timeoutMs: 600000, // 10 minutes timeout for individual commands
                   // When the command prints normal output add it to stdout text.
                   onStdout: (data: string) => {
                     buffers.stdout += data;
@@ -77,8 +83,8 @@ export const codeAgentFunction = inngest.createFunction(
           },
         }),
         createTool({
-          name: 'createOrUpdateFiles',
-          description: 'Create or update a file in the sandbox.',
+          name: "createOrUpdateFiles",
+          description: "Create or update a file in the sandbox.",
           // Zod schema: an array of { path, content } objects — file path + text to write.
           parameters: z.object({
             files: z.array(
@@ -89,9 +95,12 @@ export const codeAgentFunction = inngest.createFunction(
             ),
           }),
           // When called, we get files array. Also access network shared state.
-          handler: async ({ files }, { step, network }: Tool.Options<AgentState>) => {
+          handler: async (
+            { files },
+            { step, network }: Tool.Options<AgentState>
+          ) => {
             const newFiles = await step?.run(
-              'createOrUpdateFiles',
+              "createOrUpdateFiles",
               async () => {
                 try {
                   // start an object that remembers written files across tool calls.
@@ -105,27 +114,27 @@ export const codeAgentFunction = inngest.createFunction(
                   }
                   return updateFiles;
                 } catch (error) {
-                  return 'Error creating files: ' + error;
+                  return "Error creating files: " + error;
                 }
               }
             );
             // After step finishes, check: if we actually got an object back,
             // save it into network.state.data.files so all agents/steps can see updated file list.
-            if (typeof newFiles === 'object') {
+            if (typeof newFiles === "object") {
               network.state.data.files = newFiles;
             }
           },
         }),
         createTool({
-          name: 'readFiles',
-          description: 'Read files from the sandbox.',
+          name: "readFiles",
+          description: "Read files from the sandbox.",
           // Needs a list / array of file paths (strings).
           parameters: z.object({
             files: z.array(z.string()),
           }),
           handler: async ({ files }, { step }) => {
             // This tool reads files from the sandbox and returns their contents.
-            return await step?.run('readFiles', async () => {
+            return await step?.run("readFiles", async () => {
               try {
                 const sandbox = await getSandbox(sandboxId);
                 const contents = [];
@@ -136,7 +145,7 @@ export const codeAgentFunction = inngest.createFunction(
                 }
                 return JSON.stringify(contents);
               } catch (error) {
-                return 'Error reading files: ' + error;
+                return "Error reading files: " + error;
               }
             });
           },
@@ -154,7 +163,7 @@ export const codeAgentFunction = inngest.createFunction(
             lastAssistantTextMessageIndex(result);
           // If the text contains <task_summary> tag, store entire message in network.state.data.summary so other parts can know we’re done / have summary.
           if (lastAssistantTextMessage && network) {
-            if (lastAssistantTextMessage.includes('<task_summary>')) {
+            if (lastAssistantTextMessage.includes("<task_summary>")) {
               network.state.data.summary = lastAssistantTextMessage;
             }
           }
@@ -163,7 +172,7 @@ export const codeAgentFunction = inngest.createFunction(
       },
     });
     const network = createNetwork<AgentState>({
-      name: 'code-agent-network',
+      name: "code-agent-network",
       agents: [codeAgent],
       maxIter: 30,
       // if we have a summary in the network state, break the loop.
@@ -181,20 +190,20 @@ export const codeAgentFunction = inngest.createFunction(
       !result.state.data.summary ||
       Object.keys(result.state.data.files || {}).length === 0;
 
-    const sandboxUrl = await step.run('get-sandbox-url', async () => {
+    const sandboxUrl = await step.run("get-sandbox-url", async () => {
       const sandbox = await getSandbox(sandboxId);
       const host = sandbox.getHost(3000);
       return `https://${host}`;
     });
 
-    await step.run('save-result', async () => {
-      if (isError) {  
+    await step.run("save-result", async () => {
+      if (isError) {
         return await prisma.message.create({
           data: {
             projectId: event.data.projectId,
-            content: 'Something went wrong. Please try again.',
-            role: 'ASSISTANT',
-            type: 'ERROR',
+            content: "Something went wrong. Please try again.",
+            role: "ASSISTANT",
+            type: "ERROR",
           },
         });
       }
@@ -202,12 +211,12 @@ export const codeAgentFunction = inngest.createFunction(
         data: {
           projectId: event.data.projectId,
           content: result.state.data.summary,
-          role: 'ASSISTANT',
-          type: 'RESULT',
+          role: "ASSISTANT",
+          type: "RESULT",
           Fragment: {
             create: {
               sandboxUrl: sandboxUrl,
-              title: 'Fragment',
+              title: "Fragment",
               file: result.state.data.files,
             },
           },
@@ -217,7 +226,7 @@ export const codeAgentFunction = inngest.createFunction(
 
     return {
       url: sandboxUrl,
-      title: 'Fragment',
+      title: "Fragment",
       files: result.state.data.files,
       summary: result.state.data.summary,
     };
