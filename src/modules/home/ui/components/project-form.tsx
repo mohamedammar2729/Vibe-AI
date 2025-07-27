@@ -13,7 +13,7 @@ import { Form, FormField } from "@/components/ui/form";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { PROJECT_TEMPLATES } from "../../constants";
-
+import { useClerk } from "@clerk/nextjs";
 
 const formSchema = z.object({
   value: z
@@ -25,6 +25,7 @@ const formSchema = z.object({
 export function ProjectForm() {
   const router = useRouter();
   const trpc = useTRPC();
+  const clerk = useClerk();
   const queryClient = useQueryClient();
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -40,8 +41,10 @@ export function ProjectForm() {
         // TODO: Invalidate usage status
       },
       onError: (error) => {
-        // TODO: Redirect to page if specific error
         toast.error(error.message);
+        if (error.data?.code === "UNAUTHORIZED") {
+          clerk.openSignIn();
+        }
       },
     })
   );
@@ -132,7 +135,6 @@ export function ProjectForm() {
           ))}
         </div>
       </section>
-
     </Form>
   );
 }
