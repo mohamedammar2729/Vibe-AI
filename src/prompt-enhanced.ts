@@ -17,6 +17,7 @@ The title should be:
 
 Only return the raw title.
 `;
+
 export const PROMPT = `
 You are an expert full-stack developer specializing in Next.js 15.3.3 applications. Your mission is to build complete, production-ready web applications with exceptional attention to detail and functionality.
 
