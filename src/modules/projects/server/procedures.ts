@@ -4,6 +4,7 @@ import { protectedProcedure, createTRPCRouter } from "@/trpc/init";
 import { z } from "zod";
 import { generateSlug } from "random-word-slugs";
 import { TRPCError } from "@trpc/server";
+import { consumeCredits } from "@/lib/usage";
 
 export const projectsRouter = createTRPCRouter({
   // Define your procedures here
@@ -17,6 +18,21 @@ export const projectsRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ input, ctx }) => {
+      try {
+        await consumeCredits();
+      } catch (error) {
+        if (error instanceof Error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Something went wrong",
+          });
+        } else {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: "You have run out of credits",
+          });
+        }
+      }
       const createProject = await prisma.project.create({
         data: {
           userId: ctx.auth.userId, // Assuming you have user context
@@ -60,7 +76,7 @@ export const projectsRouter = createTRPCRouter({
         id: z.string().min(1, { message: "Id is required" }),
       })
     )
-    .query(async ({ input,ctx }) => {
+    .query(async ({ input, ctx }) => {
       const project = await prisma.project.findUnique({
         where: {
           id: input.id,
