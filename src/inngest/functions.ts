@@ -52,6 +52,7 @@ export const codeAgentFunction = inngest.createFunction(
           orderBy: {
             createdAt: "desc",
           },
+          take: 5, // Limit to the last 5 messages
         });
         for (const message of messages) {
           formattedMessages.push({
@@ -60,7 +61,7 @@ export const codeAgentFunction = inngest.createFunction(
             content: message.content,
           });
         }
-        return formattedMessages;
+        return formattedMessages.reverse(); // Reverse to maintain chronological order
       }
     );
 

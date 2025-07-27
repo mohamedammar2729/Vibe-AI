@@ -5,7 +5,6 @@ import { useSuspenseQuery } from '@tanstack/react-query';
 import {
   ChevronDownIcon,
   ChevronLeftIcon,
-  EditIcon,
   SunMoonIcon,
 } from 'lucide-react';
 import { useTRPC } from '@/trpc/client';
@@ -19,7 +18,6 @@ import {
   DropdownMenuPortal,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuLabel,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
