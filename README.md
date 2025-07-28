@@ -376,13 +376,6 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 - **[Tailwind CSS Documentation](https://tailwindcss.com/docs)**
 - **[E2B Documentation](https://e2b.dev/docs)**
 
-## 🔗 Links
-
-- **[Live Demo]([https://vibe-ai-khaki.vercel.app/])**
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgments
 
