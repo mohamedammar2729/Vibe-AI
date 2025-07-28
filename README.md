@@ -378,10 +378,7 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ## 🔗 Links
 
-- **[Live Demo](https://your-demo-url.com)**
-- **[Documentation](https://docs.your-app.com)**
-- **[Discord Community](https://discord.gg/your-community)**
-- **[Twitter](https://twitter.com/your-handle)**
+- **[Live Demo]([https://your-demo-url.com](https://vibe-ai-khaki.vercel.app/))**
 
 ## 📄 License
 
