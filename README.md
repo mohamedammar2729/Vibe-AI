@@ -227,8 +227,7 @@ vibe-ai/
 > While this application uses Gemini AI by default, **for more powerful and reliable results in production environments, we strongly recommend using other AI models such as:**
 >
 > - **Claude (Anthropic)** - Excellent for complex code generation and reasoning
-> - **GPT-4/GPT-4-turbo (OpenAI)** - Superior performance for sophisticated applications
-> - **GPT-3.5-turbo (OpenAI)** - Good balance of cost and performance
+> - **GPT-4.1 (OpenAI)** - Superior performance for sophisticated applications
 >
 > To switch AI models, update the AI integration in `src/inngest/functions.ts` and configure the appropriate API keys in your environment variables.
 
