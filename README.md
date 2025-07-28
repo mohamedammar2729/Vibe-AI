@@ -378,7 +378,7 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ## 🔗 Links
 
-- **[Live Demo]([https://your-demo-url.com](https://vibe-ai-khaki.vercel.app/))**
+- **[Live Demo]([https://vibe-ai-khaki.vercel.app/])**
 
 ## 📄 License
 
